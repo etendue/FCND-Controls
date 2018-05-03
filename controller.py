@@ -8,6 +8,8 @@ components:
 """
 import numpy as np
 from frame_utils import euler2RM
+from math import sin, cos, fmod
+import math
 
 DRONE_MASS_KG = 0.5
 GRAVITY = -9.81
@@ -19,6 +21,23 @@ class NonlinearController(object):
 
     def __init__(self):
         """Initialize the controller object and control gains"""
+        delta = 0.95
+        w_z = 4
+        self.z_k_p = w_z**2
+        self.z_k_d = w_z*2*delta
+        self.z_k_i = 1/w_z
+        self.x_k_p = 0.5
+        self.x_k_d = np.sqrt(self.x_k_p)*2*delta
+        self.y_k_p = 0.5
+        self.y_k_d = np.sqrt(self.y_k_p)*2*delta
+        self.k_p_roll = 0.02
+        self.k_p_pitch = 0.02
+        self.k_p_yaw = 2.5
+        self.k_p_p = 0.1
+        self.k_p_q = 0.1
+        self.k_p_r = 0.04
+
+        self.z_error_sum =0.0
         return    
 
     def trajectory_control(self, position_trajectory, yaw_trajectory, time_trajectory, current_time):
@@ -81,7 +100,16 @@ class NonlinearController(object):
             
         Returns: desired vehicle 2D acceleration in the local frame [north, east]
         """
-        return np.array([0.0, 0.0])
+        x_c_dot_dot = self.x_k_p * (local_position_cmd[0] - local_position[0]) + self.x_k_d * (
+                    local_velocity_cmd[0] - local_velocity[0]) + acceleration_ff[0]
+        y_c_dot_dot = self.y_k_p * (local_position_cmd[1] - local_position)[1] + self.y_k_d * (
+                    local_velocity_cmd[1] - local_velocity[1]) + acceleration_ff[1]
+
+        #print(x_c_dot_dot,y_c_dot_dot)
+        #print(local_position_cmd[0], local_position[0], local_velocity_cmd[0], local_velocity[0])
+        #print(local_position_cmd[1],local_position[1] , local_velocity_cmd[1],local_velocity[1])
+
+        return np.array([x_c_dot_dot, y_c_dot_dot])
     
     def altitude_control(self, altitude_cmd, vertical_velocity_cmd, altitude, vertical_velocity, attitude, acceleration_ff=0.0):
         """Generate vertical acceleration (thrust) command
@@ -96,7 +124,17 @@ class NonlinearController(object):
             
         Returns: thrust command for the vehicle (+up)
         """
-        return 0.0
+        self.z_error_sum += (altitude_cmd - altitude)
+
+        u_bar = self.z_k_p * (altitude_cmd - altitude) + self.z_k_d * (
+                    vertical_velocity_cmd - vertical_velocity) + self.z_k_i * self.z_error_sum + acceleration_ff
+
+        #print(self.z_error_sum *self.z_k_i, u_bar)
+        u_bar = np.clip(u_bar,0.1,MAX_THRUST)
+        rot_mat = self.R(attitude)
+
+
+        return u_bar/ rot_mat[2, 2]
         
     
     def roll_pitch_controller(self, acceleration_cmd, attitude, thrust_cmd):
@@ -109,7 +147,24 @@ class NonlinearController(object):
             
         Returns: 2-element numpy array, desired rollrate (p) and pitchrate (q) commands in radians/s
         """
-        return np.array([0.0, 0.0])
+        rot_mat = self.R(attitude)
+        R11 = rot_mat[0,0]
+        R12 = rot_mat[0,1]
+        R21 = rot_mat[1,0]
+        R22 = rot_mat[1,1]
+        R13 = rot_mat[0,2]
+        R23 = rot_mat[1,2]
+        R33 = rot_mat[2,2]
+        b_x_c_dot = self.k_p_roll * (acceleration_cmd[0] / thrust_cmd - R13)
+        b_y_c_dot = self.k_p_pitch * (acceleration_cmd[1] / thrust_cmd - R23)
+        p_c = (R21*b_x_c_dot - R11*b_y_c_dot)/R33
+        q_c = (R22*b_x_c_dot - R12*b_y_c_dot)/R33
+        #print(p_c,q_c, b_x_c_dot,b_y_c_dot,acceleration_cmd[0],acceleration_cmd[1])
+        #return np.array([0.0,0.0])
+        return np.array([-p_c,-q_c])
+
+
+
     
     def body_rate_control(self, body_rate_cmd, body_rate):
         """ Generate the roll, pitch, yaw moment commands in the body frame
@@ -120,16 +175,41 @@ class NonlinearController(object):
             
         Returns: 3-element numpy array, desired roll moment, pitch moment, and yaw moment commands in Newtons*meters
         """
-        return np.array([0.0, 0.0, 0.0])
+
+        error_pqr = np.array(body_rate_cmd) - np.array(body_rate)
+        control_gain = np.array([self.k_p_p,self.k_p_q,self.k_p_r])
+        u_bar_pqr = control_gain * error_pqr
+
+        return u_bar_pqr
     
     def yaw_control(self, yaw_cmd, yaw):
         """ Generate the target yawrate
-        
-        Args:
             yaw_cmd: desired vehicle yaw in radians
             yaw: vehicle yaw in radians
         
         Returns: target yawrate in radians/sec
         """
-        return 0.0
-    
+        return self.k_p_yaw * fmod(yaw_cmd-yaw,math.pi)
+
+    def R(self, attitude):
+        """get rotation matrix"""
+        # attitude: the vehicle's current attitude, 3 element numpy array (roll, pitch, yaw) in radians
+        # return rotation_matrix
+        phi, theta, psi = attitude
+
+        Rx = np.array([[1, 0, 0],
+                       [0, cos(phi), -sin(phi)],
+                       [0, sin(phi), cos(phi)]
+                       ])
+        Ry = np.array([[cos(theta), 0, sin(theta)],
+                       [0, 1, 0],
+                       [-sin(theta), 0, cos(theta)]
+                       ])
+        Rz = np.array([[cos(psi), -sin(psi), 0],
+                       [sin(psi), cos(psi), 0],
+                       [0, 0, 1]
+                       ])
+
+        #print(attitude)
+
+        return Rz @ (Ry @ Rx)

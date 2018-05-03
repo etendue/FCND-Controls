@@ -55,7 +55,11 @@ class ControlsFlyer(UnityDrone):
                  self.position_trajectory,
                  self.yaw_trajectory,
                  self.time_trajectory, time.time())
+
         self.attitude_target = np.array((0.0, 0.0, yaw_cmd))
+        #self.attitude_target = np.array((0.0, 0.0, 0.0))
+        #self.local_position_target = np.array([self.local_position_target[0],0.0,self.local_position_target[2]])
+        #self.local_velocity_target= np.array([self.local_velocity_target[0],0.0,self.local_velocity_target[2]])
         acceleration_cmd = self.controller.lateral_position_control(
                 self.local_position_target[0:2],
                 self.local_velocity_target[0:2],
@@ -64,8 +68,17 @@ class ControlsFlyer(UnityDrone):
         self.local_acceleration_target = np.array([acceleration_cmd[0],
                                                    acceleration_cmd[1],
                                                    0.0])
+
+        print("x:",int(self.local_position[0]),"x_target:",int(self.local_position_target[0]))
+        #self.local_position_target = np.array([0.0, 0.0, -3.0])
+        #self.local_velocity_target = np.array([0.0, 0.0, 0.0])
+        #self.attitude_target = np.array((0.0, 0.0, 0.0))
+        #self.local_acceleration_target = np.array([0,0.0,0.0])
+        #print(self.local_acceleration_target)
+
         
     def attitude_controller(self):
+
         self.thrust_cmd = self.controller.altitude_control(
                 -self.local_position_target[2],
                 -self.local_velocity_target[2],
@@ -82,8 +95,10 @@ class ControlsFlyer(UnityDrone):
                 self.attitude[2])
         self.body_rate_target = np.array(
                 [roll_pitch_rate_cmd[0], roll_pitch_rate_cmd[1], yawrate_cmd])
+
         
-    def bodyrate_controller(self):        
+    def bodyrate_controller(self):
+
         moment_cmd = self.controller.body_rate_control(
                 self.body_rate_target,
                 self.gyro_raw)
