@@ -57,9 +57,9 @@ class ControlsFlyer(UnityDrone):
                  self.time_trajectory, time.time())
 
         self.attitude_target = np.array((0.0, 0.0, yaw_cmd))
-        #self.attitude_target = np.array((0.0, 0.0, 0.0))
-        #self.local_position_target = np.array([self.local_position_target[0],0.0,self.local_position_target[2]])
-        #self.local_velocity_target= np.array([self.local_velocity_target[0],0.0,self.local_velocity_target[2]])
+        self.attitude_target = np.array((0.0, 0.0, 0.0))
+        self.local_position_target = np.array([self.local_position_target[0],0.0,self.local_position_target[2]])
+        self.local_velocity_target= np.array([self.local_velocity_target[0],0.0,self.local_velocity_target[2]])
         acceleration_cmd = self.controller.lateral_position_control(
                 self.local_position_target[0:2],
                 self.local_velocity_target[0:2],
@@ -69,7 +69,7 @@ class ControlsFlyer(UnityDrone):
                                                    acceleration_cmd[1],
                                                    0.0])
 
-        print("x:",int(self.local_position[0]),"x_target:",int(self.local_position_target[0]))
+        print("x:y",int(self.local_position[0]), int(self.local_position[1]),"x_t,y_t:",int(self.local_position_target[0]),int(self.local_position_target[1]))
         #self.local_position_target = np.array([0.0, 0.0, -3.0])
         #self.local_velocity_target = np.array([0.0, 0.0, 0.0])
         #self.attitude_target = np.array((0.0, 0.0, 0.0))
@@ -84,8 +84,8 @@ class ControlsFlyer(UnityDrone):
                 -self.local_velocity_target[2],
                 -self.local_position[2],
                 -self.local_velocity[2],
-                self.attitude,
-                9.81)
+                self.attitude)
+
         roll_pitch_rate_cmd = self.controller.roll_pitch_controller(
                 self.local_acceleration_target[0:2],
                 self.attitude,

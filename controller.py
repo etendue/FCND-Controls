@@ -21,21 +21,20 @@ class NonlinearController(object):
 
     def __init__(self):
         """Initialize the controller object and control gains"""
-        delta = 0.95
-        w_z = 4
-        self.z_k_p = w_z**2
-        self.z_k_d = w_z*2*delta
-        self.z_k_i = 1/w_z
-        self.x_k_p = 0.5
+        delta = 1.0
+        self.z_k_p = 64.0
+        self.z_k_d = np.sqrt(self.z_k_p)*2*delta
+        self.z_k_i = 1.0
+        self.x_k_p = 0.5*5
         self.x_k_d = np.sqrt(self.x_k_p)*2*delta
-        self.y_k_p = 0.5
+        self.y_k_p = 0.5*5
         self.y_k_d = np.sqrt(self.y_k_p)*2*delta
         self.k_p_roll = 0.02
         self.k_p_pitch = 0.02
         self.k_p_yaw = 2.5
-        self.k_p_p = 0.1
-        self.k_p_q = 0.1
-        self.k_p_r = 0.04
+        self.k_p_p = 0.1*5
+        self.k_p_q = 0.1*5
+        self.k_p_r = 0.04*5
 
         self.z_error_sum =0.0
         return    
@@ -130,11 +129,14 @@ class NonlinearController(object):
                     vertical_velocity_cmd - vertical_velocity) + self.z_k_i * self.z_error_sum + acceleration_ff
 
         #print(self.z_error_sum *self.z_k_i, u_bar)
-        u_bar = np.clip(u_bar,0.1,MAX_THRUST)
+
+
         rot_mat = self.R(attitude)
+        thrust_cmd = (u_bar +  GRAVITY)/ rot_mat[2, 2]
+        thrust_cmd = np.clip(thrust_cmd, 0.1, MAX_THRUST / DRONE_MASS_KG)
+        print(thrust_cmd)
 
-
-        return u_bar/ rot_mat[2, 2]
+        return thrust_cmd
         
     
     def roll_pitch_controller(self, acceleration_cmd, attitude, thrust_cmd):
@@ -147,6 +149,7 @@ class NonlinearController(object):
             
         Returns: 2-element numpy array, desired rollrate (p) and pitchrate (q) commands in radians/s
         """
+        #print(thrust_cmd)
         rot_mat = self.R(attitude)
         R11 = rot_mat[0,0]
         R12 = rot_mat[0,1]
@@ -160,7 +163,9 @@ class NonlinearController(object):
         p_c = (R21*b_x_c_dot - R11*b_y_c_dot)/R33
         q_c = (R22*b_x_c_dot - R12*b_y_c_dot)/R33
         #print(p_c,q_c, b_x_c_dot,b_y_c_dot,acceleration_cmd[0],acceleration_cmd[1])
-        #return np.array([0.0,0.0])
+        return np.array([0.0,0.0])
+        #p_c = np.clip(p_c, -50,50)
+        #q_c = np.clip(p_c, -50,50)
         return np.array([-p_c,-q_c])
 
 
